@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, send_file
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -199,6 +199,8 @@ def scrape_google_maps(keywords, details_cnt):
             filename = "google_maps_results.csv"
             df = pd.DataFrame(data)
             df.to_csv(filename, index=False)
+            return filename
+        return None
 
 # Route for the main page
 @app.route('/')
@@ -210,8 +212,15 @@ def index():
 def scrape():
     details_cnt = request.form['details_cnt']
     keywords = request.form['keywords']
-    scrape_google_maps(keywords, int(details_cnt))
-    return "Scraping completed! Data saved to 'google_maps_results.csv'. Check your project directory."
+    
+    # Scrape the data and get the filename
+    filename = scrape_google_maps(keywords, int(details_cnt))
+    
+    if filename:
+        # Return the CSV file as a download
+        return send_file(filename, as_attachment=True)
+    else:
+        return "No data collected or an error occurred during scraping."
 
 if __name__ == "__main__":
     app.run(debug=True)

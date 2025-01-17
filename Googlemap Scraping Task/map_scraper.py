@@ -13,7 +13,7 @@ import time
 app = Flask(__name__)
 
 # Function to scrape data from Google Maps
-def scrape_google_maps(keywords):
+def scrape_google_maps(keywords, details_cnt):
     SOURCE = "Google Map"
     chrome_options = webdriver.ChromeOptions()
     chrome_options.add_experimental_option("detach", True)
@@ -48,11 +48,11 @@ def scrape_google_maps(keywords):
         try:
             scrollable_div = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
             last_height = driver.execute_script("return arguments[0].scrollHeight", scrollable_div)
-            
+
             for _ in range(3):  # Limit scroll attempts
                 driver.execute_script("arguments[0].scrollTo(0, arguments[0].scrollHeight);", scrollable_div)
                 time.sleep(2)
-                
+
                 new_height = driver.execute_script("return arguments[0].scrollHeight", scrollable_div)
                 if new_height == last_height:
                     break
@@ -61,17 +61,17 @@ def scrape_google_maps(keywords):
             print(f"Scroll error (non-critical): {str(e)}")
 
     try:
-        while len(data) < 20:  # Adjust number of results as needed
+        while len(data) < details_cnt:  # Adjust number of results as needed
             scroll_results()
             business_elements = find_businesses()
-            
+
             if not business_elements:
                 print("No business elements found, retrying...")
                 time.sleep(2)
                 continue
 
             for business_element in business_elements:
-                if len(data) >= 20:
+                if len(data) >= details_cnt:
                     break
 
                 try:
@@ -83,7 +83,7 @@ def scrape_google_maps(keywords):
                         except StaleElementReferenceException:
                             business_elements = find_businesses()
                             continue
-                    
+
                     if not current_name or current_name in processed_names:
                         continue
 
@@ -107,13 +107,28 @@ def scrape_google_maps(keywords):
                         print(f"Failed to click business element, skipping...")
                         continue
 
-                    time.sleep(2)
-                    
+                    time.sleep(3)
+
                     # Extract details with explicit waits
                     try:
                         name = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "DUwDvf"))).text
                     except:
                         name = ""
+
+                    try:
+                        rating = driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[2]/div/div[1]/div[2]/div/div[1]/div[2]/span[1]/span[1]').text
+                    except:
+                        rating = ""
+
+                    try:
+                        review_count = driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[2]/div/div[1]/div[2]/div/div[1]/div[2]/span[2]/span/span').text
+                    except:
+                        review_count = ""
+
+                    try:
+                        status = driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[7]/div[4]/div[1]/div[2]/div/span[1]/span/span[1]').text
+                    except:
+                        status = ""
 
                     try:
                         address = driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[7]/div[3]/button/div/div[2]/div[1]').text
@@ -126,7 +141,7 @@ def scrape_google_maps(keywords):
                         phone = ""
 
                     try:
-                        website = driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[2]/div/div[1]/div/div/div[7]/div[6]/a').get_attribute("href")
+                        website = driver.find_element(By.XPATH, "//a[@class='CsEnBe']").get_attribute("href")
                     except:
                         website = ""
 
@@ -134,6 +149,8 @@ def scrape_google_maps(keywords):
                         area_state = driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[7]/div[8]/button/div/div[2]/div[1]').text
                     except:
                         area_state = ""
+
+                    
 
                     if name:
                         processed_names.add(name)
@@ -144,7 +161,10 @@ def scrape_google_maps(keywords):
                             "Address": address,
                             "Phone": phone,
                             "Website": website,
-                            "Area and State": area_state
+                            "Area and State": area_state,
+                            "Rating": rating,
+                            "Review Count": review_count,
+                            "Status": status
                         })
                         print(f"Successfully scraped {len(data)} companies: {name}")
 
@@ -188,8 +208,9 @@ def index():
 # Route to handle the form submission and trigger scraping
 @app.route('/scrape', methods=['POST'])
 def scrape():
+    details_cnt = request.form['details_cnt']
     keywords = request.form['keywords']
-    scrape_google_maps(keywords)
+    scrape_google_maps(keywords, int(details_cnt))
     return "Scraping completed! Data saved to 'google_maps_results.csv'. Check your project directory."
 
 if __name__ == "__main__":

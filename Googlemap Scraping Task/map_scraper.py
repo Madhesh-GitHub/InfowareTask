@@ -214,13 +214,15 @@ def scrape():
     keywords = request.form['keywords']
     
     # Scrape the data and get the filename
-    filename = scrape_google_maps(keywords, int(details_cnt))
+    output_file = scrape_google_maps(keywords, int(details_cnt))
     
-    if filename:
-        # Return the CSV file as a download
-        return send_file(filename, as_attachment=True)
-    else:
-        return "No data collected or an error occurred during scraping."
+    return render_template('download.html', file_name=output_file)
+    
+# Route to download the file
+@app.route('/download/<file_name>')
+def download_file(file_name):
+    return send_file(file_name, as_attachment=True)
+
 
 if __name__ == "__main__":
     app.run(debug=True)

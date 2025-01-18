@@ -8,221 +8,228 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import StaleElementReferenceException
 import pandas as pd
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor
+import os
 
-# Flask app initialization
 app = Flask(__name__)
 
-# Function to scrape data from Google Maps
-def scrape_google_maps(keywords, details_cnt):
-    SOURCE = "Google Map"
-    chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_experimental_option("detach", True)
-    driver = webdriver.Chrome(options=chrome_options)
-    driver.maximize_window()
+class GoogleMapsScraper:
+    def __init__(self, keyword, details_cnt, thread_id):
+        self.keyword = keyword
+        self.details_cnt = details_cnt
+        self.thread_id = thread_id
+        self.SOURCE = "Google Maps"
+        self.data = []
+        self.processed_names = set()
 
-    # Navigate to Google Maps
-    driver.get("https://www.google.com/maps")
-    time.sleep(3)
+    def initialize_driver(self):
+        chrome_options = webdriver.ChromeOptions()
+        chrome_options.add_experimental_option("detach", True)
+        self.driver = webdriver.Chrome(options=chrome_options)
+        self.driver.maximize_window()
+        self.wait = WebDriverWait(self.driver, 10)
 
-    # Search for the keyword
-    search_box = driver.find_element(By.ID, "searchboxinput")
-    search_box.send_keys(keywords)
-    search_box.send_keys(Keys.RETURN)
-    time.sleep(5)
-
-    data = []
-    processed_names = set()
-    wait = WebDriverWait(driver, 10)
-
-    def find_businesses(max_retries=3):
-        """Find business elements with retry logic"""
+    def find_businesses(self, max_retries=3):
         for _ in range(max_retries):
             try:
-                return wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, "hfpxzc")))
+                return self.wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, "hfpxzc")))
             except:
                 time.sleep(2)
         return []
 
-    def scroll_results():
-        """Scroll the results panel with error handling"""
+    def scroll_results(self):
         try:
-            scrollable_div = driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
-            last_height = driver.execute_script("return arguments[0].scrollHeight", scrollable_div)
+            scrollable_div = self.driver.find_element(By.CSS_SELECTOR, 'div[role="feed"]')
+            last_height = self.driver.execute_script("return arguments[0].scrollHeight", scrollable_div)
 
-            for _ in range(3):  # Limit scroll attempts
-                driver.execute_script("arguments[0].scrollTo(0, arguments[0].scrollHeight);", scrollable_div)
+            for _ in range(3):
+                self.driver.execute_script("arguments[0].scrollTo(0, arguments[0].scrollHeight);", scrollable_div)
                 time.sleep(2)
 
-                new_height = driver.execute_script("return arguments[0].scrollHeight", scrollable_div)
+                new_height = self.driver.execute_script("return arguments[0].scrollHeight", scrollable_div)
                 if new_height == last_height:
                     break
                 last_height = new_height
         except Exception as e:
-            print(f"Scroll error (non-critical): {str(e)}")
+            print(f"Thread {self.thread_id} - Scroll error: {str(e)}")
 
-    try:
-        while len(data) < details_cnt:  # Adjust number of results as needed
-            scroll_results()
-            business_elements = find_businesses()
+    def extract_details(self):
+         # Extract details with explicit waits
+        try:
+            name = self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, "DUwDvf"))).text
+        except:
+            name = ""
 
-            if not business_elements:
-                print("No business elements found, retrying...")
-                time.sleep(2)
-                continue
+        try:
+            rating = self.driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[2]/div/div[1]/div[2]/div/div[1]/div[2]/span[1]/span[1]').text
+        except:
+            rating = ""
 
-            for business_element in business_elements:
-                if len(data) >= details_cnt:
-                    break
+        try:
+            review_count = self.driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[2]/div/div[1]/div[2]/div/div[1]/div[2]/span[2]/span/span').text
+        except:
+            review_count = ""
 
-                try:
-                    # Retry getting business name if stale
-                    for _ in range(3):
-                        try:
-                            current_name = business_element.get_attribute("aria-label")
-                            break
-                        except StaleElementReferenceException:
-                            business_elements = find_businesses()
-                            continue
+        try:
+            status = self.driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[7]/div[4]/div[1]/div[2]/div/span[1]/span/span[1]').text
+        except:
+            status = ""
 
-                    if not current_name or current_name in processed_names:
-                        continue
+        try:
+            address = self.driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[7]/div[3]/button/div/div[2]/div[1]').text
+        except:
+            address = ""
 
-                    # Click with retry logic
-                    clicked = False
-                    for _ in range(3):
-                        try:
-                            driver.execute_script("arguments[0].click();", business_element)
-                            clicked = True
-                            break
-                        except:
-                            try:
-                                ActionChains(driver).move_to_element(business_element).click().perform()
-                                clicked = True
-                                break
-                            except:
-                                time.sleep(1)
-                                continue
+        try:
+            phone = self.driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[7]/div[7]/button/div/div[2]/div[1]').text
+        except:
+            phone = ""
 
-                    if not clicked:
-                        print(f"Failed to click business element, skipping...")
-                        continue
+        try:
+            website = self.driver.find_element(By.XPATH, "//a[@class='CsEnBe']").get_attribute("href")
+        except:
+            website = ""
 
-                    time.sleep(3)
+        try:
+            area_state = self.driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[7]/div[8]/button/div/div[2]/div[1]').text
+        except:
+            area_state = ""
 
-                    # Extract details with explicit waits
-                    try:
-                        name = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "DUwDvf"))).text
-                    except:
-                        name = ""
+        return {
+            "name": name,
+            "rating": rating,
+            "review_count": review_count,
+            "address": address,
+            "phone": phone,
+            "website": website,
+            "status": status,
+            "area_state":area_state
+        }
 
-                    try:
-                        rating = driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[2]/div/div[1]/div[2]/div/div[1]/div[2]/span[1]/span[1]').text
-                    except:
-                        rating = ""
+    def scrape(self):
+        try:
+            self.initialize_driver()
+            self.driver.get("https://www.google.com/maps")
+            time.sleep(3)
 
-                    try:
-                        review_count = driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[2]/div/div[1]/div[2]/div/div[1]/div[2]/span[2]/span/span').text
-                    except:
-                        review_count = ""
+            # Search for keyword
+            search_box = self.driver.find_element(By.ID, "searchboxinput")
+            search_box.send_keys(self.keyword)
+            search_box.send_keys(Keys.RETURN)
+            time.sleep(5)
 
-                    try:
-                        status = driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[7]/div[4]/div[1]/div[2]/div/span[1]/span/span[1]').text
-                    except:
-                        status = ""
+            while len(self.data) < self.details_cnt:
+                self.scroll_results()
+                business_elements = self.find_businesses()
 
-                    try:
-                        address = driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[7]/div[3]/button/div/div[2]/div[1]').text
-                    except:
-                        address = ""
-
-                    try:
-                        phone = driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[7]/div[7]/button/div/div[2]/div[1]').text
-                    except:
-                        phone = ""
-
-                    try:
-                        website = driver.find_element(By.XPATH, "//a[@class='CsEnBe']").get_attribute("href")
-                    except:
-                        website = ""
-
-                    try:
-                        area_state = driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[7]/div[8]/button/div/div[2]/div[1]').text
-                    except:
-                        area_state = ""
-
-                    
-
-                    if name:
-                        processed_names.add(name)
-                        data.append({
-                            "Keywords": keywords,
-                            "Source": SOURCE,
-                            "Name": name,
-                            "Address": address,
-                            "Phone": phone,
-                            "Website": website,
-                            "Area and State": area_state,
-                            "Rating": rating,
-                            "Review Count": review_count,
-                            "Status": status
-                        })
-                        print(f"Successfully scraped {len(data)} companies: {name}")
-
-                    # Go back with retry logic
-                    for _ in range(3):
-                        try:
-                            driver.execute_script("window.history.go(-1)")
-                            time.sleep(2)
-                            break
-                        except:
-                            time.sleep(1)
-
-                except Exception as e:
-                    print(f"Error processing business (continuing): {str(e)}")
-                    try:
-                        driver.execute_script("window.history.go(-1)")
-                    except:
-                        pass
+                if not business_elements:
+                    print(f"Thread {self.thread_id} - No businesses found for '{self.keyword}', retrying...")
                     time.sleep(2)
                     continue
 
-            if not data:
-                print("No data collected yet, retrying...")
-                time.sleep(2)
+                for business in business_elements:
+                    if len(self.data) >= self.details_cnt:
+                        break
 
-    except Exception as e:
-        print(f"Major error: {str(e)}")
+                    try:
+                        # Get business name and check if already processed
+                        current_name = business.get_attribute("aria-label")
+                        if not current_name or current_name in self.processed_names:
+                            continue
 
-    finally:
-        driver.quit()
-        if data:
-            filename = "google_maps_results.csv"
-            df = pd.DataFrame(data)
-            df.to_csv(filename, index=False)
-            return filename
-        return None
+                        # Click on the business
+                        self.driver.execute_script("arguments[0].click();", business)
+                        time.sleep(3)
 
-# Route for the main page
+                        # Extract business details
+                        details = self.extract_details()
+                        
+                        if details["name"]:
+                            self.processed_names.add(details["name"])
+                            self.data.append({
+                                "Keyword": self.keyword,
+                                "Source": self.SOURCE,
+                                **details
+                            })
+                            print(f"Thread {self.thread_id} - Scraped {len(self.data)} businesses for '{self.keyword}'")
+
+                        # Go back to results
+                        self.driver.execute_script("window.history.go(-1)")
+                        time.sleep(2)
+
+                    except Exception as e:
+                        print(f"Error processing business: {str(e)}")
+                        self.driver.execute_script("window.history.go(-1)")
+                        time.sleep(2)
+                        continue
+
+        except Exception as e:
+            print(f"Thread {self.thread_id} - Major error: {str(e)}")
+
+        finally:
+            self.driver.quit()
+            if self.data:
+                filename = f"results_{self.keyword}_{self.thread_id}.csv"
+                filename = "".join(c for c in filename if c.isalnum() or c in ('-', '_', '.'))
+                df = pd.DataFrame(self.data)
+                df.to_csv(filename, index=False)
+                return filename
+            return None
+
+def merge_csv_files(file_list):
+    dfs = []
+    for file in file_list:
+        try:
+            df = pd.read_csv(file)
+            dfs.append(df)
+            os.remove(file)
+        except Exception as e:
+            print(f"Error processing file {file}: {str(e)}")
+    
+    if dfs:
+        combined_df = pd.concat(dfs, ignore_index=True)
+        output_file = "combined_results.csv"
+        combined_df.to_csv(output_file, index=False)
+        return output_file
+    return None
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# Route to handle the form submission and trigger scraping
 @app.route('/scrape', methods=['POST'])
 def scrape():
-    details_cnt = request.form['details_cnt']
-    keywords = request.form['keywords']
+    keywords = request.form.getlist('keywords[]')
+    details_counts = [int(count) for count in request.form.getlist('details_cnt[]')]
     
-    # Scrape the data and get the filename
-    output_file = scrape_google_maps(keywords, int(details_cnt))
+    # Create tasks from keyword-count pairs
+    tasks = list(zip(keywords, details_counts))
+    max_threads = min(len(tasks) * 2, 8)  # Maximum 2 threads per keyword, up to 8 total
     
-    return render_template('download.html', file_name=output_file)
+    output_files = []
     
-# Route to download the file
+    with ThreadPoolExecutor(max_workers=max_threads) as executor:
+        futures = []
+        for i, (keyword, count) in enumerate(tasks):
+            scraper = GoogleMapsScraper(keyword, count, i)
+            futures.append(executor.submit(scraper.scrape))
+            # Collecting results from all threads
+        for future in futures:
+            result = future.result()
+            if result:
+                output_files.append(result)
+    
+    # Merge all CSV files if any exist
+    if output_files:
+        final_file = merge_csv_files(output_files)
+        return render_template('download.html', file_name=final_file)
+    
+    return "No data was scraped", 404
+
 @app.route('/download/<file_name>')
 def download_file(file_name):
     return send_file(file_name, as_attachment=True)
-
 
 if __name__ == "__main__":
     app.run(debug=True)

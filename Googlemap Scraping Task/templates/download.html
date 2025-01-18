@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Download Results</title>
     <style>
-        /* Reset some default styles */
         body {
             margin: 0;
             font-family: Arial, sans-serif;
@@ -26,12 +25,36 @@
 
         h1 {
             color: #2c3e50;
+            margin-bottom: 20px;
         }
 
-        a {
+        .progress {
+            margin: 20px 0;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+
+        a.download-button {
             display: inline-block;
             margin-top: 20px;
-            padding: 10px 20px;
+            padding: 12px 24px;
+            font-size: 16px;
+            color: #fff;
+            background-color: #27ae60;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+
+        a.download-button:hover {
+            background-color: #219a52;
+        }
+
+        .back-button {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 12px 24px;
             font-size: 16px;
             color: #fff;
             background-color: #3498db;
@@ -40,26 +63,29 @@
             transition: background-color 0.3s;
         }
 
-        a:hover {
+        .back-button:hover {
             background-color: #2980b9;
         }
 
-        a:active {
-            transform: scale(0.98);
+        .button-group {
+            margin-top: 30px;
         }
 
-        @media (max-width: 768px) {
-            .container {
-                margin: 20px;
-                padding: 15px;
-            }
+        .button-group a {
+            margin: 0 10px;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Scraping Completed!</h1>
-        <a href="/download/{{ file_name }}">Download Results</a>
+        <div class="progress">
+            Your data has been successfully collected and is ready for download.
+        </div>
+        <div class="button-group">
+            <a href="/download/{{ file_name }}" class="download-button">Download Results</a>
+            <a href="/" class="back-button">Start New Search</a>
+        </div>
     </div>
 </body>
 </html>

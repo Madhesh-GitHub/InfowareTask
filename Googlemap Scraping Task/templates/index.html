@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Google Maps Scraper</title>
     <style>
-        /* Reset some default styles */
         body {
             margin: 0;
             font-family: Arial, sans-serif;
@@ -14,84 +13,134 @@
             line-height: 1.6;
         }
 
-         .container {
-            max-width: 500px;
-            height: 300px;
+        .container {
+            max-width: 600px;
             margin: 50px auto;
             padding: 20px;
             background: #fff;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             border-radius: 8px;
-        } 
+        }
 
         h1 {
             text-align: center;
             color: #2c3e50;
+            margin-bottom: 30px;
         }
 
-        form {
+        .keyword-group {
+            margin-bottom: 15px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            position: relative;
+        }
+
+        .remove-keyword {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            cursor: pointer;
             display: flex;
-            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
         label {
+            display: block;
             margin-bottom: 5px;
             font-weight: bold;
         }
 
         input {
-            margin-bottom: 15px;
-            padding: 10px;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 8px;
             font-size: 16px;
             border: 1px solid #ccc;
             border-radius: 4px;
+            box-sizing: border-box;
         }
 
-        input:focus {
-            border-color: #3498db;
-            box-shadow: 0 0 4px rgba(52, 152, 219, 0.4);
-            outline: none;
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
         }
 
         button {
             padding: 10px;
             font-size: 16px;
             color: #fff;
-            background-color: #3498db;
             border: none;
             border-radius: 4px;
             cursor: pointer;
             transition: background-color 0.3s;
+            flex: 1;
         }
 
-        button:hover {
+        #add-keyword {
+            background-color: #27ae60;
+        }
+
+        #add-keyword:hover {
+            background-color: #219a52;
+        }
+
+        #submit-form {
+            background-color: #3498db;
+        }
+
+        #submit-form:hover {
             background-color: #2980b9;
-        }
-
-        button:active {
-            transform: scale(0.98);
-        }
-
-        @media (max-width: 768px) {
-            .container {
-                margin: 20px;
-                padding: 15px;
-            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Google Maps Scraper</h1>
-        <form action="/scrape" method="post">
-            <label for="details_cnt">Enter Total Details:</label>
-            <input type="text" id="details_cnt" name="details_cnt" required>
-            
-            <label for="keywords">Enter Keywords:</label>
-            <input type="text" id="keywords" name="keywords" required>
-            
-            <button type="submit">Scrape</button>
+        <form id="scrapeForm" action="/scrape" method="POST">
+            <div id="keywords-container">
+                <div class="keyword-group">
+                    <button type="button" class="remove-keyword" style="display: none;">×</button>
+                    <label>Search Keyword:</label>
+                    <input type="text" name="keywords[]" placeholder="Enter business type or location" required>
+                    <label>Number of Results:</label>
+                    <input type="number" name="details_cnt[]" min="1" placeholder="How many results needed?" required>
+                </div>
+            </div>
+            <div class="button-group">
+                <button type="button" id="add-keyword">Add Another Search</button>
+                <button type="submit" id="submit-form">Start Scraping</button>
+            </div>
         </form>
     </div>
+
+    <script>
+        document.getElementById('add-keyword').addEventListener('click', function() {
+            const container = document.getElementById('keywords-container');
+            const newGroup = container.children[0].cloneNode(true);
+            
+            // Clear the input values
+            newGroup.querySelectorAll('input').forEach(input => input.value = '');
+            
+            // Show remove button
+            const removeBtn = newGroup.querySelector('.remove-keyword');
+            removeBtn.style.display = 'flex';
+            removeBtn.addEventListener('click', function() {
+                if (container.children.length > 1) {
+                    newGroup.remove();
+                }
+            });
+            
+            container.appendChild(newGroup);
+        });
+    </script>
 </body>
 </html>
